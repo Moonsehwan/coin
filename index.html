@@ -1,0 +1,274 @@
+﻿<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>코인 캘린더 — MVP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <div class="max-w-6xl mx-auto p-4">
+    <header class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
+      <h1 class="text-2xl font-bold">🗓️ 코인 캘린더 — MVP</h1>
+      <div class="text-sm text-slate-500">이벤트 API: /api/events · 통계: /api/stats · 캘린더: /api/ics</div>
+    </header>
+
+    <!-- 요약바 -->
+    <section id="summary" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-sm text-slate-500 mb-1">최근 <span id="sum-hours">24</span>시간</div>
+        <div class="flex flex-wrap gap-2 text-sm" id="sum-cats"></div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4 md:col-span-2">
+        <div class="text-sm text-slate-500 mb-1">Top 심볼</div>
+        <div class="flex flex-wrap gap-2 text-sm" id="sum-syms"></div>
+      </div>
+    </section>
+
+    <!-- 빠른 탭 -->
+    <nav class="flex flex-wrap items-center gap-2 mb-3">
+      <button data-tab="" class="tab px-3 py-1.5 rounded-full border bg-white">전체</button>
+      <button data-tab="listing" class="tab px-3 py-1.5 rounded-full border bg-white">상장</button>
+      <button data-tab="delist" class="tab px-3 py-1.5 rounded-full border bg-white">거래지원 종료</button>
+      <button data-tab="hack" class="tab px-3 py-1.5 rounded-full border bg-white">보안 이슈</button>
+      <span class="ml-auto text-sm text-slate-500" id="status"></span>
+    </nav>
+
+    <!-- Filters -->
+    <section class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-3">
+      <div>
+        <label class="block text-sm mb-1">최소 임팩트</label>
+        <input id="f-impact" type="number" min="0" max="10" step="1" value="0" class="w-full border rounded-lg px-3 py-2" />
+      </div>
+      <div>
+        <label class="block text-sm mb-1">심볼(쉼표)</label>
+        <input id="f-symbols" type="text" placeholder="BTC,ETH" class="w-full border rounded-lg px-3 py-2" />
+      </div>
+      <div>
+        <label class="block text-sm mb-1">카테고리</label>
+        <input id="f-category" type="text" placeholder="listing,delist,..." class="w-full border rounded-lg px-3 py-2" />
+      </div>
+      <div>
+        <label class="block text-sm mb-1">검색(제목/본문)</label>
+        <input id="f-q" type="text" placeholder="예: 상장, 점검, BTC" class="w-full border rounded-lg px-3 py-2" />
+      </div>
+      <div>
+        <label class="block text-sm mb-1">최근(시간)</label>
+        <div class="flex gap-2">
+          <input id="f-since" type="number" min="0" step="1" value="24" class="w-full border rounded-lg px-3 py-2" />
+          <div class="flex flex-col gap-1">
+            <button class="preset text-xs px-2 py-1 border rounded" data-h="6">6h</button>
+            <button class="preset text-xs px-2 py-1 border rounded" data-h="24">24h</button>
+            <button class="preset text-xs px-2 py-1 border rounded" data-h="72">72h</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="flex items-center justify-between mb-3 gap-2">
+      <div class="flex items-center gap-2">
+        <button id="btn-load" class="px-4 py-2 rounded-lg bg-black text-white">불러오기</button>
+        <button id="btn-reset" class="px-3 py-2 rounded-lg border">초기화</button>
+      </div>
+      <div class="flex items-center gap-3 text-sm">
+        <a id="ics-link" href="/api/ics?minImpact=0" class="underline">📆 캘린더(ICS)</a>
+      </div>
+    </section>
+
+    <!-- List -->
+    <section id="list" class="grid gap-3 mb-3"></section>
+    <div class="flex justify-center mb-10">
+      <button id="btn-more" class="px-4 py-2 rounded-lg border bg-white">더 보기</button>
+    </div>
+  </div>
+
+  <script>
+    // ---------- 상태 ----------
+    const $impact  = document.getElementById('f-impact');
+    const $symbols = document.getElementById('f-symbols');
+    const $cat     = document.getElementById('f-category');
+    const $q       = document.getElementById('f-q');
+    const $since   = document.getElementById('f-since');
+    const $btn     = document.getElementById('btn-load');
+    const $reset   = document.getElementById('btn-reset');
+    const $list    = document.getElementById('list');
+    const $more    = document.getElementById('btn-more');
+    const $ics     = document.getElementById('ics-link');
+    const $status  = document.getElementById('status');
+    const $tabs    = Array.from(document.querySelectorAll('.tab'));
+    const $sumCats = document.getElementById('sum-cats');
+    const $sumSyms = document.getElementById('sum-syms');
+    const $sumHours= document.getElementById('sum-hours');
+
+    const catKo = {
+      listing:"상장", delist:"거래지원 종료", wallet:"입출금/지갑", upgrade:"메인넷/업그레이드",
+      maintenance:"점검", hack:"보안 이슈", tokenomics:"거버넌스/토크노믹스", partnership:"파트너십/상용화", other:"기타"
+    };
+
+    let state = {
+      offset: 0,
+      limit: 50,
+      total: 0,
+    };
+
+    // ---------- 유틸 ----------
+    const saveFilters = () => {
+      const data = {
+        impact:$impact.value, symbols:$symbols.value, category:$cat.value,
+        q:$q.value, since:$since.value
+      };
+      localStorage.setItem('cc_filters', JSON.stringify(data));
+    };
+    const loadFilters = () => {
+      try {
+        const raw = localStorage.getItem('cc_filters'); if (!raw) return;
+        const d = JSON.parse(raw);
+        $impact.value=d.impact??0; $symbols.value=d.symbols??''; $cat.value=d.category??'';
+        $q.value=d.q??''; $since.value=d.since??24;
+      } catch {}
+    };
+
+    function badge(text, cls) {
+      return `<span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${cls}">${text}</span>`;
+    }
+    function fmtDate(iso) {
+      if (!iso) return '-';
+      const d = new Date(iso);
+      const z = n => String(n).padStart(2,'0');
+      return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`;
+    }
+    function polarityCls(p) {
+      if (p === 'bull') return 'bg-green-100 text-green-700';
+      if (p === 'bear') return 'bg-red-100 text-red-700';
+      return 'bg-slate-100 text-slate-700';
+    }
+    function buildParams(extra={}) {
+      const params = new URLSearchParams();
+      const imp = Number($impact.value||0); if (imp>0) params.set('minImpact', String(imp));
+      const syms = ($symbols.value||'').trim(); if (syms) params.set('symbols', syms);
+      const cat  = ($cat.value||'').trim(); if (cat) params.set('category', cat);
+      const q    = ($q.value||'').trim(); if (q) params.set('q', q);
+      const since= Number($since.value||0); if (since>0) params.set('sinceHours', String(since));
+      params.set('limit', String(state.limit));
+      params.set('offset', String(state.offset));
+      for (const [k,v] of Object.entries(extra)) params.set(k, v);
+      return params;
+    }
+
+    async function fetchJSON(url) {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`${r.status}`);
+      return await r.json();
+    }
+
+    // ---------- 요약바 ----------
+    async function loadSummary() {
+      $sumHours.textContent = $since.value || 24;
+      const params = new URLSearchParams();
+      if (Number($impact.value||0)>0) params.set('minImpact', $impact.value);
+      if (Number($since.value||0)>0) params.set('sinceHours', $since.value);
+      const j = await fetchJSON('/api/stats?' + params.toString());
+      // 카테고리
+      const cats = j.categories || {};
+      const catBadges = Object.entries(cats)
+        .sort((a,b)=>b[1]-a[1])
+        .map(([k,c])=>badge(`${catKo[k]||k} ${c}`,'bg-slate-100 text-slate-700'))
+        .join('') || '<span class="text-slate-400">데이터 없음</span>';
+      $sumCats.innerHTML = catBadges;
+      // 심볼
+      const syms = j.topSymbols || [];
+      const symBadges = syms.map(x => badge(`${x.symbol} ${x.count}`,'bg-amber-100 text-amber-700')).join('') || '<span class="text-slate-400">데이터 없음</span>';
+      $sumSyms.innerHTML = symBadges;
+    }
+
+    // ---------- 리스트 ----------
+    async function load(reset=false) {
+      if (reset) { state.offset = 0; state.total = 0; $list.innerHTML=''; }
+      saveFilters();
+      $ics.href = '/api/ics?' + new URLSearchParams({ minImpact: String(Number($impact.value||0)) });
+
+      $btn.disabled = true; $more.disabled = true;
+      $status.textContent = '불러오는 중…';
+
+      try {
+        const url = '/api/events?' + buildParams().toString();
+        const json = await fetchJSON(url);
+        state.total = json.count ?? 0;
+
+        const rows = json.rows || [];
+        if (reset && rows.length===0) {
+          $list.innerHTML = `
+            <div class="bg-white rounded-xl shadow p-6 text-slate-600">
+              <div class="font-semibold mb-1">표시할 이벤트가 없습니다.</div>
+              <ul class="list-disc ml-5 text-sm leading-6">
+                <li>필터(최근 시간/최소 임팩트/검색어)를 완화해 보세요.</li>
+                <li>방금 수집된 데이터가 없을 수 있어요(10분 간격). 잠시 후 다시 시도.</li>
+                <li>소스 확장(빗썸/네트워크/입출금)을 켜면 더 많이 들어옵니다.</li>
+              </ul>
+            </div>`;
+        } else {
+          const html = rows.map(e => {
+            const pol = badge(e.polarity||'중립', polarityCls(e.polarity));
+            const cat = badge(catKo[e.category]||'기타', 'bg-slate-100 text-slate-700');
+            const imp = badge('임팩트 ' + (e.impact ?? '-'), 'bg-indigo-100 text-indigo-700');
+            const syms = (e.symbols||[]).slice(0,8).map(s => badge(s,'bg-amber-100 text-amber-700')).join(' ');
+            const src = badge(e.source||'출처', 'bg-sky-100 text-sky-700');
+            const when = fmtDate(e.starts_at || e.created_at);
+            const desc = (e.description||'').slice(0,140);
+
+            return `
+              <article class="bg-white rounded-xl shadow p-4">
+                <div class="flex flex-wrap items-center gap-2 mb-2">${src} ${cat} ${pol} ${imp} ${syms}</div>
+                <a class="font-semibold hover:underline" href="${e.url||'#'}" target="_blank" rel="noopener">${e.title||'(제목 없음)'}</a>
+                <div class="text-sm text-slate-500 mt-1">${when}</div>
+                ${desc ? `<div class="text-sm text-slate-600 mt-2">${desc}</div>` : ''}
+              </article>`;
+          }).join('');
+          $list.insertAdjacentHTML('beforeend', html);
+          state.offset += rows.length;
+        }
+
+        // 더 보기 활성/비활성
+        const remain = state.total - state.offset;
+        $more.disabled = remain <= 0;
+        $more.textContent = remain > 0 ? `더 보기 (+${Math.min(remain, state.limit)})` : '더 이상 없음';
+
+        $status.textContent = `총 ${state.total}건 · 표시 ${state.offset}건`;
+        loadSummary();
+      } catch (e) {
+        $status.textContent = `로드 실패: ${e}`;
+      } finally {
+        $btn.disabled = false;
+      }
+    }
+
+    // ---------- 이벤트 핸들러 ----------
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      $impact.value = 0; $symbols.value=''; $cat.value=''; $q.value=''; $since.value=24;
+      load(true);
+    });
+    document.getElementById('btn-load').addEventListener('click', () => load(true));
+    document.getElementById('btn-more').addEventListener('click', () => load(false));
+    document.querySelectorAll('.preset').forEach(btn => btn.addEventListener('click', e=>{
+      $since.value = e.currentTarget.dataset.h;
+      load(true);
+    }));
+    $tabs.forEach(t => t.addEventListener('click', (e)=>{
+      const val = e.currentTarget.dataset.tab || '';
+      document.querySelectorAll('.tab').forEach(b=>b.classList.remove('bg-black','text-white'));
+      e.currentTarget.classList.add('bg-black','text-white');
+      document.getElementById('f-category').value = val;
+      load(true);
+    }));
+
+    // 초기화
+    loadFilters();
+    (async ()=>{
+      // Health status
+      try { const r = await fetch('/api/health'); const j = await r.json(); $status.textContent = `서버 OK · ${fmtDate(j.ts)}`; } catch {}
+      await loadSummary();
+      await load(true);
+    })();
+  </script>
+</body>
+</html>
