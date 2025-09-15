@@ -9,10 +9,33 @@ jobs:
   run-ingest:
     runs-on: ubuntu-latest
     steps:
+      - name: Check APP_URL secret exists
+        run: |
+          if [ -z "${APP_URL}" ]; then
+            echo "APP_URL secret is missing"; exit 1;
+          fi
+          echo "APP_URL length: ${#APP_URL}"
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+
+      - name: Healthcheck
+        run: |
+          set -euxo pipefail
+          code=$(curl -sS -w "%{http_code}" -o /tmp/health "$APP_URL/api/health")
+          echo "HTTP $code"
+          cat /tmp/health
+          test "$code" -eq 200
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+
       - name: Call /api/ingest
         run: |
-          curl -s -X POST "$APP_URL/api/ingest" \
+          set -euxo pipefail
+          code=$(curl -sS -w "%{http_code}" -o /tmp/resp -X POST "$APP_URL/api/ingest" \
             -H "content-type: application/json" \
-            -d '{"dryRun":false}'
+            -d '{"dryRun":false}')
+          echo "HTTP $code"
+          cat /tmp/resp
+          test "$code" -eq 200
         env:
           APP_URL: ${{ secrets.APP_URL }}
