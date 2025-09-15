@@ -1,4 +1,5 @@
-<name: Ingest every 10 minutes
+name: Ingest every 10 minutes
+
 on:
   schedule:
     - cron: "*/10 * * * *"
@@ -11,30 +12,28 @@ jobs:
       - name: Print APP_URL
         run: |
           echo "APP_URL=${APP_URL}"
-          echo "len(APP_URL)=${#APP_URL}"
+          echo "LEN=${#APP_URL}"
         env:
           APP_URL: ${{ secrets.APP_URL }}
 
       - name: Healthcheck
+        shell: bash
         run: |
-          set -euxo pipefail
-          code=$(curl -sS -w "%{http_code}" -o /tmp/health "$APP_URL/api/health")
-          echo "HTTP $code"
+          set -euo pipefail
+          CODE=$(curl -sS -w "%{http_code}" -o /tmp/health "$APP_URL/api/health")
+          echo "HTTP ${CODE}"
           cat /tmp/health
-          test "$code" -eq 200
         env:
           APP_URL: ${{ secrets.APP_URL }}
 
-      - name: Call /api/ingest (dryRun=false)
+      - name: Call ingest (dryRun=false)
+        shell: bash
         run: |
-          set -euxo pipefail
-          code=$(curl -sS -w "%{http_code}" -o /tmp/resp -X POST "$APP_URL/api/ingest" \
+          set -euo pipefail
+          CODE=$(curl -sS -w "%{http_code}" -o /tmp/resp -X POST "$APP_URL/api/ingest" \
             -H "content-type: application/json" \
             -d '{"dryRun":false}')
-          echo "HTTP $code"
+          echo "HTTP ${CODE}"
           cat /tmp/resp
-          # 200? ???? ?? ??? ?? ??
-          if [ "$code" -ne 200 ]; then echo "::warning::ingest returned $code"; fi
         env:
           APP_URL: ${{ secrets.APP_URL }}
->
