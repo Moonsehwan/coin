@@ -9,34 +9,54 @@ jobs:
   run-ingest:
     runs-on: ubuntu-latest
     steps:
-      - name: Print APP_URL
+      # (A) ??? ??? ?? ??? ???? ???
+      - name: Hardcoded URL quick test (health)
         shell: bash
         run: |
-          echo "APP_URL=${APP_URL}"
+          curl -4 -vI --connect-timeout 10 --max-time 20 https://coin-calendar.vercel.app/api/health || true
+
+      # (B) ??? ? ??(?????)
+      - name: Show APP_URL EXACT bytes
+        shell: bash
+        run: |
+          echo "::notice::APP_URL=[$APP_URL]"
+          echo -n "$APP_URL" | hexdump -C
           echo "LEN=${#APP_URL}"
         env:
           APP_URL: ${{ secrets.APP_URL }}
 
+      # (C) DNS & ?? ?? ??(IPv4 ??)
+      - name: DNS & curl -v (force IPv4)
+        shell: bash
+        run: |
+          set -x
+          host="$(echo "$APP_URL" | sed -E 's@https?://([^/]+).*@\1@')"
+          echo "HOST=$host"
+          getent hosts "$host" || true
+          curl -4 -vI --connect-timeout 10 --max-time 20 "$APP_URL/api/health" || true
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+
+      # (D) ?? ??(?? ??, ???? ??)
       - name: Healthcheck (print body, never fail)
         shell: bash
         run: |
-          code=$(curl -s -w "%{http_code}" -o /tmp/health "$APP_URL/api/health" || echo "000")
+          code=$(curl -4 -s -w "%{http_code}" -o /tmp/health "$APP_URL/api/health" || echo "000")
           echo "HEALTH HTTP=${code}"
           [ -f /tmp/health ] && cat /tmp/health || true
           exit 0
         env:
           APP_URL: ${{ secrets.APP_URL }}
 
+      # (E) ???? ??(?? ??, ???? ??)
       - name: Call ingest (dryRun=false, print body, never fail)
         shell: bash
         run: |
-          code=$(curl -s -w "%{http_code}" -o /tmp/resp -X POST "$APP_URL/api/ingest" \
+          code=$(curl -4 -s -w "%{http_code}" -o /tmp/resp -X POST "$APP_URL/api/ingest" \
             -H "content-type: application/json" \
             -d '{"dryRun":false}' || echo "000")
           echo "INGEST HTTP=${code}"
           [ -f /tmp/resp ] && cat /tmp/resp || true
-          if [ "$code" -lt 200 ] || [ "$code" -ge 400 ]; then
-            echo "::warning::ingest returned ${code}";
-          fi
+          if [ "$code" -eq 000 ]; then echo "::warning::curl failed (see DNS & curl -v step)"; fi
         env:
           APP_URL: ${{ secrets.APP_URL }}
