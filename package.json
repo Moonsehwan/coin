@@ -1,0 +1,13 @@
+{
+  "name": "coin-calendar-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.46.1",
+    "ics": "^3.5.0",
+    "rss-parser": "^3.13.0",
+    "zod": "^3.23.8"
+  }
+}
