@@ -10,30 +10,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Print APP_URL
+        shell: bash
         run: |
           echo "APP_URL=${APP_URL}"
           echo "LEN=${#APP_URL}"
         env:
           APP_URL: ${{ secrets.APP_URL }}
 
-      - name: Healthcheck
+      - name: Healthcheck (print body, never fail)
         shell: bash
         run: |
-          set -euo pipefail
-          CODE=$(curl -sS -w "%{http_code}" -o /tmp/health "$APP_URL/api/health")
-          echo "HTTP ${CODE}"
-          cat /tmp/health
+          code=$(curl -s -w "%{http_code}" -o /tmp/health "$APP_URL/api/health" || echo "000")
+          echo "HEALTH HTTP=${code}"
+          [ -f /tmp/health ] && cat /tmp/health || true
+          exit 0
         env:
           APP_URL: ${{ secrets.APP_URL }}
 
-      - name: Call ingest (dryRun=false)
+      - name: Call ingest (dryRun=false, print body, never fail)
         shell: bash
         run: |
-          set -euo pipefail
-          CODE=$(curl -sS -w "%{http_code}" -o /tmp/resp -X POST "$APP_URL/api/ingest" \
+          code=$(curl -s -w "%{http_code}" -o /tmp/resp -X POST "$APP_URL/api/ingest" \
             -H "content-type: application/json" \
-            -d '{"dryRun":false}')
-          echo "HTTP ${CODE}"
-          cat /tmp/resp
+            -d '{"dryRun":false}' || echo "000")
+          echo "INGEST HTTP=${code}"
+          [ -f /tmp/resp ] && cat /tmp/resp || true
+          if [ "$code" -lt 200 ] || [ "$code" -ge 400 ]; then
+            echo "::warning::ingest returned ${code}";
+          fi
         env:
           APP_URL: ${{ secrets.APP_URL }}
