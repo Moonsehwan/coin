@@ -4,69 +4,154 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Coin Calendar</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:980px;margin:20px auto;padding:0 12px}
-    header{display:flex;gap:8px;align-items:center;justify-content:space-between}
-    .filters{display:flex;gap:8px;flex-wrap:wrap}
-    table{width:100%;border-collapse:collapse;margin-top:12px}
-    th,td{border-bottom:1px solid #eee;padding:8px 6px;font-size:14px}
-    th{text-align:left;background:#fafafa}
-    .badge{padding:2px 6px;border-radius:6px;background:#eee;font-size:12px}
+    :root { --brand: #6366f1; }
+    header .pill { background: var(--brand); color: #fff; border-radius: 999px; padding: 2px 10px; font-size: .8rem; }
+    table { width:100%; }
+    thead th { position: sticky; top: 0; background: var(--pico-background-color); z-index: 1; }
+    .badge { background: #eef2ff; color:#3730a3; border-radius:12px; padding:2px 8px; font-size:.75rem; }
+    .muted { color: var(--pico-muted-color); }
+    .row-actions { display:flex; gap:.5rem; align-items:center; justify-content:flex-end }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 10px; }
+    .pill-neutral{background:#e5e7eb;color:#111827}
+    .pill-bull{background:#dcfce7;color:#166534}
+    .pill-bear{background:#fee2e2;color:#991b1b}
+    .empty { text-align:center; padding: 4rem 1rem; border:1px dashed var(--pico-muted-border-color); border-radius:12px; }
+    .toolbar { display:grid; grid-template-columns: repeat(6,1fr); gap:.75rem; }
+    @media (max-width: 960px){ .toolbar{ grid-template-columns: 1fr 1fr; } .row-actions{ justify-content: flex-start } }
   </style>
 </head>
 <body>
-  <header>
-    <h2>🗓️ 코인 캘린더</h2>
-    <div class="filters">
-      <label>최소 영향
-        <input id="min" type="number" value="0" min="0" max="10" style="width:64px">
+  <main class="wrap">
+    <header style="display:flex; align-items:center; justify-content:space-between; gap:1rem; margin: 1.2rem 0;">
+      <hgroup>
+        <h1 style="margin:0">🗓️ 코인 캘린더</h1>
+        <p class="muted" id="status">최근 이벤트를 불러오는 중…</p>
+      </hgroup>
+      <span class="pill">MVP</span>
+    </header>
+
+    <section class="toolbar">
+      <label>
+        최소 영향
+        <input id="min" type="number" value="0" min="0" max="10" />
       </label>
-      <input id="symbol" placeholder="기호 (예: BTC)" />
-      <select id="category">
-        <option value="">모든 카테고리</option>
-        <option>listing</option><option>delist</option><option>wallet</option>
-        <option>upgrade</option><option>maintenance</option><option>security</option>
-        <option>governance</option><option>partnership</option>
-      </select>
-      <button id="load">조회</button>
-    </div>
-  </header>
+      <label>
+        기호 (예: BTC)
+        <input id="symbol" placeholder="BTC" />
+      </label>
+      <label>
+        카테고리
+        <select id="category">
+          <option value="">전체</option>
+          <option>listing</option>
+          <option>delist</option>
+          <option>wallet</option>
+          <option>upgrade</option>
+          <option>maintenance</option>
+          <option>security</option>
+          <option>governance</option>
+          <option>partnership</option>
+        </select>
+      </label>
+      <label>
+        자동 새로고침(분)
+        <input id="autorefresh" type="number" min="0" value="0" />
+      </label>
+      <div class="row-actions">
+        <button id="load" class="contrast">불러오기</button>
+        <button id="reset" class="secondary">초기화</button>
+      </div>
+    </section>
 
-  <table id="tbl">
-    <thead><tr>
-      <th>시간</th><th>제목</th><th>영향</th><th>범주</th><th>기호</th>
-    </tr></thead>
-    <tbody></tbody>
-  </table>
+    <article id="empty" class="empty" hidden>
+      <h3>표시할 이벤트가 없어요</h3>
+      <p class="muted">필터를 낮추거나, 수집 파이프라인이 정상인지 확인하세요.</p>
+    </article>
 
-<script>
-async function load(){
-  const min = document.getElementById('min').value || 0;
-  const sym = document.getElementById('symbol').value.trim();
-  const cat = document.getElementById('category').value;
-  const p = new URLSearchParams();
-  if (+min>0) p.set('minImpact', +min);
-  if (sym) p.set('symbol', sym.toUpperCase());
-  if (cat) p.set('category', cat);
-  const res = await fetch('/api/events?'+p.toString());
-  const js = await res.json();
-  const tb = document.querySelector('#tbl tbody');
-  tb.innerHTML = '';
-  for (const ev of (js.items||[])) {
-    const tr = document.createElement('tr');
-    const dt = new Date(ev.starts_at || ev.created_at || Date.now()).toLocaleString();
-    tr.innerHTML = `
-      <td>${dt}</td>
-      <td><a href="${ev.url||'#'}" target="_blank" rel="noreferrer">${ev.title}</a></td>
-      <td><span class="badge">${ev.impact ?? ''}</span></td>
-      <td>${ev.category||''}</td>
-      <td>${(ev.symbols||[]).slice(0,4).join(', ')}</td>
-    `;
-    tb.appendChild(tr);
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th style="width: 180px;">시간</th>
+          <th>제목</th>
+          <th style="width: 90px;">영향</th>
+          <th style="width: 120px;">범주</th>
+          <th style="width: 240px;">기호</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+  <script>
+  const $ = (s)=>document.querySelector(s);
+  let timer = null;
+
+  function polarityPill(p){
+    const m = { bull:'pill-bull', bear:'pill-bear', neutral:'pill-neutral' };
+    return `<span class="badge ${m[p]||'pill-neutral'}">${p||'neutral'}</span>`;
   }
-}
-document.getElementById('load').addEventListener('click', load);
-load();
-</script>
+
+  async function load(){
+    const status = $('#status');
+    status.textContent = '불러오는 중…';
+    const p = new URLSearchParams();
+    const min = +($('#min').value||0);
+    const sym = $('#symbol').value.trim();
+    const cat = $('#category').value;
+    if (min>0) p.set('minImpact', String(min));
+    if (sym) p.set('symbol', sym.toUpperCase());
+    if (cat) p.set('category', cat);
+    const res = await fetch('/api/events?'+p.toString());
+    const js = await res.json();
+
+    const tb = document.querySelector('#tbl tbody');
+    tb.innerHTML = '';
+    if (!js.ok){
+      status.textContent = '불러오기 실패: ' + (js.error||'알 수 없는 오류');
+      $('#empty').hidden = false;
+      return;
+    }
+
+    status.textContent = `총 ${js.count}건`;
+    if (!js.items || js.items.length===0){ $('#empty').hidden = false; return; }
+    $('#empty').hidden = true;
+
+    for (const ev of js.items){
+      const tr = document.createElement('tr');
+      const dt = new Date(ev.starts_at || ev.created_at || Date.now()).toLocaleString();
+      const syms = (ev.symbols||[]).slice(0,8).join(', ');
+      tr.innerHTML = `
+        <td>${dt}</td>
+        <td>
+          <a href="${ev.url||'#'}" target="_blank" rel="noreferrer">${escapeHtml(ev.title||'')}</a>
+          <div class="muted" style="margin-top:4px;">${polarityPill(ev.polarity)} 신뢰도 ${(ev.confidence??0).toFixed(2)}</div>
+        </td>
+        <td><strong>${ev.impact ?? ''}</strong></td>
+        <td>${ev.category || ''}</td>
+        <td>${syms}</td>
+      `;
+      tb.appendChild(tr);
+    }
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, (ch)=>({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    })[ch]);
+  }
+
+  $('#load').addEventListener('click', load);
+  $('#reset').addEventListener('click', ()=>{
+    $('#min').value = 0; $('#symbol').value=''; $('#category').value=''; load();
+  });
+  $('#autorefresh').addEventListener('change', ()=>{
+    const m = +$('#autorefresh').value||0;
+    if (timer) { clearInterval(timer); timer=null; }
+    if (m>0) timer = setInterval(load, m*60*1000);
+  });
+  load();
+  </script>
 </body>
 </html>
