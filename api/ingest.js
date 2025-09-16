@@ -1,32 +1,43 @@
-﻿import { fetchUpbitNotices } from "../lib/sources/upbit.js";
-// 필요시 빗썸 등 다른 소스도 여기서 합치고, supabase 저장 로직을 try/catch로 감싸세요.
+﻿// api/ingest.js (추가/갱신용 간단 합본)
+import { fetchUpbitNotices } from "../lib/sources/upbit.js";
+import { fetchUnlocks } from "../lib/sources/unlocks.js";
+import { supabase } from "../lib/db.js";
 
-export default async function handler(req, res) {
+async function sendDiscord(msg){
+  const hook = process.env.DISCORD_WEBHOOK_URL;
+  if (!hook) return;
+  await fetch(hook, { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ content: msg }) });
+}
+
+export default async function handler(req, res){
   try {
-    const body = (req.method === "POST") ? req.body : {};
+    const body   = req.method==="POST" ? req.body : {};
     const dryRun = Boolean(body?.dryRun);
 
-    const upbit = await fetchUpbitNotices(); // 내부에서 실패하면 throw될 수 있음
-    const events = upbit; // 다른 소스 합칠 거면 [...upbit, ...bithumb] 형태
+    const a = await fetchUpbitNotices().catch(()=>[]);
+    const b = await fetchUnlocks().catch(()=>[]);
+    const events = [...a, ...b];
 
-    let inserted = 0;
-    if (!dryRun) {
-      // 여기에 Supabase upsert 로직
-      // try/catch로 감싸고, 실패시 inserted=0 유지
+    let inserted = 0, newOnes = [];
+    if (!dryRun && events.length){
+      const { data, error } = await supabase
+        .from("events")
+        .upsert(events, { onConflict: "source,source_id", ignoreDuplicates: true })
+        .select();
+      if (error) throw error;
+      newOnes = data || [];
+      inserted = newOnes.length;
     }
 
-    return res.status(200).json({
-      ok: true,
-      dryRun,
-      inserted,
-      samples: events.slice(0, 5)
-    });
+    // 알림(impact ≥ 8)
+    for (const ev of newOnes){
+      if ((ev.impact ?? 0) >= 8){
+        await sendDiscord(`**[${ev.source}] ${ev.title}**\n${ev.url||""}\ncat=${ev.category} impact=${ev.impact}`);
+      }
+    }
+
+    return res.status(200).json({ ok:true, dryRun, fetched: events.length, inserted, samples: events.slice(0,5) });
   } catch (e) {
-    console.error("[ingest] crash:", e?.stack || e);
-    return res.status(200).json({
-      ok: false,
-      error: String(e?.message || e),
-      stack: String(e?.stack || "")
-    });
+    return res.status(200).json({ ok:false, error:String(e?.message||e) });
   }
 }
