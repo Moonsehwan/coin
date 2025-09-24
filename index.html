@@ -39,7 +39,7 @@
       </label>
       <label>
         기호 (예: BTC)
-        <input id="symbol" placeholder="BTC" />
+        <input id="symbol" value="" placeholder="BTC" />
       </label>
       <label>
         카테고리
@@ -93,20 +93,25 @@
     return `<span class="badge ${m[p]||'pill-neutral'}">${p||'neutral'}</span>`;
   }
 
+  function buildQuery(){
+    const p = new URLSearchParams();
+    const min = +(($('#min').value)||0);
+    const sym = ($('#symbol').value||'').trim().toUpperCase();
+    const cat = $('#category').value||'';
+    if (min>0) p.set('minImpact', String(min));
+    if (sym) p.set('symbols', sym);
+    if (cat) p.set('category', cat);
+    p.set('limit', '100');
+    p.set('sinceHours', '72');
+    return p.toString();
+  }
+
   async function load(){
     const status = $('#status');
     status.textContent = '불러오는 중…';
-    const p = new URLSearchParams();
-    const min = +($('#min').value||0);
-    const sym = $('#symbol').value.trim();
-    const cat = $('#category').value;
-    if (min>0) p.set('minImpact', String(min));
-    if (sym) p.set('symbols', sym.toUpperCase());
-    if (cat) p.set('category', cat);
-
     const tb = document.querySelector('#tbl tbody');
     try{
-      const res = await fetch('/api/events?'+p.toString(), { cache: 'no-store' });
+      const res = await fetch('/api/events?'+buildQuery(), { cache: 'no-store' });
       if (!res.ok){
         status.textContent = '불러오기 실패: ' + res.status;
         $('#empty').hidden = false;
@@ -147,13 +152,19 @@
 
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, (ch)=>({
-      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'
     })[ch]);
   }
 
   $('#load').addEventListener('click', load);
   $('#reset').addEventListener('click', ()=>{
-    $('#min').value = 0; $('#symbol').value=''; $('#category').value=''; load();
+    $('#min').value = 0;
+    $('#symbol').value='';
+    $('#category').value='';
+    const ar = $('#autorefresh');
+    ar.value = 0;
+    if (timer) { clearInterval(timer); timer=null; }
+    load();
   });
   $('#autorefresh').addEventListener('change', ()=>{
     const m = +$('#autorefresh').value||0;
