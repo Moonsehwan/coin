@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "../lib/db.js";
 
 export default async function handler(req, res) {
   const url = process.env.SUPABASE_URL;
@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const sb = createClient(url, key, { auth: { persistSession: false } });
+    const sb = supabase;
     const { error } = await sb.from("events").select("id", { head: true, count: "exact" }).limit(1);
     return res.status(200).json({ ok: true, env, tableExists: !error, tableError: error?.message || null });
   } catch (e) {

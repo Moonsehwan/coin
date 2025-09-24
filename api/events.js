@@ -1,12 +1,10 @@
-﻿import { createClient } from "@supabase/supabase-js";
+import { supabase } from "../lib/db.js";
 
 function num(v, d){ const n=Number(v); return Number.isFinite(n)?n:d; }
 
 export default async function handler(req, res) {
   try{
-    const url=process.env.SUPABASE_URL, key=process.env.SUPABASE_SERVICE_ROLE;
-    if(!url || !key) return res.status(500).json({error:"Missing Supabase envs"});
-    const sb=createClient(url, key, { auth: { persistSession: false }});
+    const sb = supabase;
 
     const { searchParams } = new URL(req.url, `http://${req.headers.host}`);
     const limit=num(searchParams.get('limit'), 50);

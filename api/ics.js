@@ -1,11 +1,9 @@
-﻿import { createClient } from "@supabase/supabase-js";
+import { supabase } from "../lib/db.js";
 import { createEvents } from "ics";
 
 export default async function handler(req, res){
   try {
-    const url=process.env.SUPABASE_URL, key=process.env.SUPABASE_SERVICE_ROLE;
-    if(!url || !key){ res.status(500).send("Missing envs"); return; }
-    const sb=createClient(url,key,{auth:{persistSession:false}});
+    const sb = supabase;
 
     const { searchParams } = new URL(req.url, `http://${req.headers.host}`);
     const minImpact = Number(searchParams.get("minImpact")||0);

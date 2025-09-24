@@ -1,11 +1,8 @@
-﻿import { createClient } from "@supabase/supabase-js";
+import { supabase } from "../lib/db.js";
 
 export default async function handler(req, res){
   try{
-    const url=process.env.SUPABASE_URL, key=process.env.SUPABASE_SERVICE_ROLE;
-    if(!url||!key) return res.status(500).json({error:"Missing Supabase envs"});
-
-    const sb=createClient(url,key,{auth:{persistSession:false}});
+    const sb = supabase;
     const n = Math.max(1, Math.min(10, Number(new URL(req.url, "http://x").searchParams.get("n")||3)));
 
     const now = new Date();
