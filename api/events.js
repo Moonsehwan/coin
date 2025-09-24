@@ -1,4 +1,7 @@
-﻿import { createClient } from "@supabase/supabase-js";
+﻿import './_bootstrap.js';
+
+
+import { createClient } from "@supabase/supabase-js";
 
 function num(v, d){ const n=Number(v); return Number.isFinite(n)?n:d; }
 
