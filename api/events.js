@@ -44,7 +44,7 @@ export default async function handler(req, res) {
 
     const { data, error, count } = await query;
     if(error) return res.status(500).json({error: error.message});
-    return res.status(200).json({ ok:true, count, rows: data });
+    return res.status(200).json({ ok:true, count, items: data });
   }catch(e){
     return res.status(500).json({ error: String(e) });
   }
