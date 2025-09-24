@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     const category=searchParams.get('category');
     const symbolQ=searchParams.get('symbols');
     const q=searchParams.get('q');
-    const sinceHours=num(searchParams.get('sinceHours'), 0);
+    const sinceHours=num(searchParams.get('sinceHours'), 24);
 
     let query=sb.from('events')
       .select('id,source,source_id,title,description,url,symbols,category,polarity,impact,confidence,starts_at,created_at', { count:'exact' })
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
 
     if(minImpact>0) query = query.gte('impact', minImpact);
     if(category){
-      const arr=category.split(',').map(s=>s.trim()).filter(Boolean);
+      const arr=category.split(',').map(s=>s.trim()).filter(Boolean).filter(s=>s.toLowerCase()!=='all' && s!=='전체');
       if(arr.length) query = query.in('category', arr);
     }
     if(symbolQ){
