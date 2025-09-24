@@ -22,7 +22,7 @@ export default async function handler(req, res) {
 
     if(minImpact>0) query = query.gte('impact', minImpact);
     if(category){
-      const arr=category.split(',').map(s=>s.trim()).filter(Boolean);
+      const arr=category.split(',').map(s=>s.trim()).filter(Boolean).filter(s=>s.toLowerCase()!=='all' && s!=='전체');
       if(arr.length) query = query.in('category', arr);
     }
     if(symbolQ){

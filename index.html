@@ -97,10 +97,11 @@
     const p = new URLSearchParams();
     const min = +(($('#min').value)||0);
     const sym = ($('#symbol').value||'').trim().toUpperCase();
-    const cat = $('#category').value||'';
+    const cat = ($('#category').value||'').trim();
+    const isAll = (v)=> !v || v==='all' || v==='ALL' || v==='전체';
     if (min>0) p.set('minImpact', String(min));
-    if (sym) p.set('symbols', sym);
-    if (cat) p.set('category', cat);
+    if (sym && sym!=='BTC') p.set('symbols', sym);
+    if (!isAll(cat)) p.set('category', cat);
     p.set('limit', '100');
     p.set('sinceHours', '72');
     return p.toString();
