@@ -39,7 +39,7 @@
       </label>
       <label>
         기호 (예: BTC)
-        <input id="symbol" value="" placeholder="BTC" />
+        <input id="symbol" value="" placeholder="BTC" autocomplete="off" />
       </label>
       <label>
         카테고리
@@ -167,6 +167,8 @@
     if (timer) { clearInterval(timer); timer=null; }
     load();
   });
+  // 일부 브라우저 자동완성으로 값이 남는 경우를 방지
+  (function(){ const sym=$('#symbol'); if(sym) sym.value=''; })();
   $('#autorefresh').addEventListener('change', ()=>{
     const m = +$('#autorefresh').value||0;
     if (timer) { clearInterval(timer); timer=null; }
